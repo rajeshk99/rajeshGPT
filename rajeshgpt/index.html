@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RajeshGPT — a small machine that learned Shakespeare</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,300;0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink:        #161310;
+    --ink-2:      #1f1b15;
+    --parchment:  #efe6d2;
+    --parchment-dim: #b9ad94;
+    --gold:       #c9a227;
+    --gold-dim:   #8a7327;
+    --seal:       #8a3324;
+    --rule:       #3a3326;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    background: var(--ink);
+    color: var(--parchment);
+    font-family: 'Spectral', serif;
+    min-height: 100vh;
+  }
+
+  body {
+    background-image:
+      radial-gradient(ellipse 900px 500px at 50% -10%, rgba(201,162,39,0.08), transparent 60%),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
+  }
+
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 56px 24px 80px;
+  }
+
+  /* ---------- Title page ---------- */
+  header { text-align: center; margin-bottom: 48px; }
+
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+    margin-bottom: 18px;
+  }
+
+  h1 {
+    font-size: clamp(40px, 7vw, 64px);
+    font-weight: 600;
+    margin: 0 0 6px;
+    letter-spacing: -0.01em;
+    color: var(--parchment);
+  }
+  h1 em {
+    font-style: italic;
+    font-weight: 300;
+    color: var(--gold);
+  }
+
+  .subtitle {
+    font-style: italic;
+    font-size: 16px;
+    color: var(--parchment-dim);
+    max-width: 480px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
+
+  .divider {
+    width: 120px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold-dim), transparent);
+    margin: 28px auto 0;
+  }
+
+  /* ---------- The console ---------- */
+  .console {
+    background: var(--ink-2);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    box-shadow: 0 20px 60px -20px rgba(0,0,0,0.6);
+    overflow: hidden;
+  }
+
+  .console-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--rule);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--parchment-dim);
+    text-transform: uppercase;
+  }
+
+  .status-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--parchment-dim);
+    margin-right: 7px;
+  }
+  .status-dot.live { background: var(--seal); box-shadow: 0 0 8px var(--seal); animation: pulse 1.2s infinite; }
+  .status-dot.ready { background: var(--gold); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  .prompt-row {
+    display: flex;
+    border-bottom: 1px solid var(--rule);
+  }
+  .prompt-row input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--parchment);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    padding: 16px 18px;
+  }
+  .prompt-row input::placeholder { color: var(--parchment-dim); opacity: 0.6; }
+
+  .prompt-row button {
+    background: var(--gold);
+    color: var(--ink);
+    border: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0 22px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .prompt-row button:hover:not(:disabled) { background: #ddb73a; }
+  .prompt-row button:disabled { background: var(--rule); color: var(--parchment-dim); cursor: not-allowed; }
+
+  .output-area {
+    min-height: 220px;
+    max-height: 420px;
+    overflow-y: auto;
+    padding: 22px 18px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14.5px;
+    line-height: 1.75;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .output-area .cursor {
+    display: inline-block;
+    width: 8px;
+    height: 16px;
+    background: var(--gold);
+    margin-left: 1px;
+    vertical-align: middle;
+    animation: blink 0.9s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .output-area .placeholder { color: var(--parchment-dim); font-style: italic; font-family: 'Spectral', serif; }
+
+  /* ---------- the "machine room" panel (signature element) ---------- */
+  .machine-room {
+    border-top: 1px solid var(--rule);
+    padding: 14px 18px 16px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .mr-label {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+    margin-bottom: 10px;
+  }
+  .candidates {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    min-height: 26px;
+  }
+  .candidate {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    border: 1px solid var(--rule);
+    color: var(--parchment-dim);
+    background: rgba(255,255,255,0.02);
+  }
+  .candidate.chosen {
+    border-color: var(--gold);
+    color: var(--gold);
+    background: rgba(201,162,39,0.08);
+  }
+  .candidate .ch {
+    font-weight: 700;
+    color: inherit;
+  }
+  .candidate .pct { opacity: 0.65; font-size: 10.5px; }
+
+  /* ---------- controls ---------- */
+  .controls {
+    display: flex;
+    gap: 22px;
+    flex-wrap: wrap;
+    margin-top: 22px;
+    padding: 16px 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    color: var(--parchment-dim);
+  }
+  .control { display: flex; align-items: center; gap: 8px; }
+  .control label { letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap; }
+  .control input[type="range"] {
+    width: 110px;
+    accent-color: var(--gold);
+  }
+  .control .val { color: var(--gold); min-width: 28px; }
+
+  /* ---------- presets ---------- */
+  .presets { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .preset {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--parchment-dim);
+    border: 1px solid var(--rule);
+    background: transparent;
+    padding: 6px 12px;
+    border-radius: 100px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .preset:hover { border-color: var(--gold-dim); color: var(--gold); }
+
+  /* ---------- footer / how it works ---------- */
+  .colophon {
+    margin-top: 56px;
+    padding-top: 28px;
+    border-top: 1px solid var(--rule);
+    font-size: 13px;
+    color: var(--parchment-dim);
+    line-height: 1.8;
+  }
+  .colophon strong { color: var(--parchment); font-weight: 500; }
+  .colophon code {
+    font-family: 'JetBrains Mono', monospace;
+    background: rgba(255,255,255,0.04);
+    padding: 1px 6px;
+    border-radius: 3px;
+    color: var(--gold);
+    font-size: 12px;
+  }
+
+  .offline-banner {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    background: rgba(138,51,36,0.12);
+    border: 1px solid rgba(138,51,36,0.4);
+    color: #d99a8a;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    padding: 12px 16px;
+    border-radius: 4px;
+    margin-bottom: 24px;
+    line-height: 1.6;
+  }
+  .offline-banner.show { display: flex; }
+  .offline-banner code { color: #e8b9ab; }
+
+  @media (max-width: 540px) {
+    .controls { gap: 14px; }
+    .control input[type="range"] { width: 80px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">a transformer, built from first principles</div>
+    <h1>Rajesh<em>GPT</em></h1>
+    <p class="subtitle">826,368 parameters. Four attention layers. One Shakespeare folio.<br>No borrowed weights — every number below was learned from scratch.</p>
+    <div class="divider"></div>
+  </header>
+
+  <div class="offline-banner" id="offlineBanner">
+    <span>⚠</span>
+    <span>Can't reach the model server. Run <code>python serve.py</code> in the rajeshgpt folder, then reload this page.</span>
+  </div>
+
+  <div class="console">
+    <div class="console-bar">
+      <span><span class="status-dot" id="statusDot"></span><span id="statusText">checking server…</span></span>
+      <span id="paramCount">—</span>
+    </div>
+
+    <form class="prompt-row" id="promptForm">
+      <input type="text" id="promptInput" placeholder="Begin a line… e.g. ROMEO:" autocomplete="off" maxlength="80">
+      <button type="submit" id="genButton">Generate</button>
+    </form>
+
+    <div class="output-area" id="output"><span class="placeholder">The manuscript is blank. Give it a first line, or generate with none — the model will choose its own opening.</span></div>
+
+    <div class="machine-room">
+      <div class="mr-label">last token sampled — alternatives the model weighed</div>
+      <div class="candidates" id="candidates"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="control">
+      <label for="tempSlider">Temperature</label>
+      <input type="range" id="tempSlider" min="0.1" max="1.6" step="0.05" value="0.8">
+      <span class="val" id="tempVal">0.80</span>
+    </div>
+    <div class="control">
+      <label for="lengthSlider">Length</label>
+      <input type="range" id="lengthSlider" min="50" max="600" step="10" value="250">
+      <span class="val" id="lengthVal">250</span>
+    </div>
+    <div class="control">
+      <label for="topkSlider">Top-k</label>
+      <input type="range" id="topkSlider" min="1" max="65" step="1" value="40">
+      <span class="val" id="topkVal">40</span>
+    </div>
+  </div>
+
+  <div class="presets">
+    <button class="preset" data-prompt="ROMEO:">Romeo</button>
+    <button class="preset" data-prompt="KING:">A King</button>
+    <button class="preset" data-prompt="Shall I compare thee">A Sonnet</button>
+    <button class="preset" data-prompt="">Blank page</button>
+  </div>
+
+  <div class="colophon">
+    <strong>What's actually happening:</strong> every character above is sampled one at a time from a probability distribution this network produced after seeing only the characters before it. There's no lookup table and no larger model behind the curtain — it's a 4-layer, 4-head decoder-only transformer, trained for a few thousand steps on the complete works of Shakespeare (~1MB of text), running live on this machine. The "alternatives" panel shows the other characters it seriously considered before <span style="color:var(--gold)">this one</span> won.
+    <br><br>
+    Source: <code>data.py</code> · <code>model.py</code> · <code>train.py</code> · <code>generate.py</code> · <code>serve.py</code> — read any of them, they're short on purpose.
+  </div>
+
+</div>
+
+<script>
+const API = "http://localhost:5000";
+
+const els = {
+  statusDot: document.getElementById('statusDot'),
+  statusText: document.getElementById('statusText'),
+  paramCount: document.getElementById('paramCount'),
+  offlineBanner: document.getElementById('offlineBanner'),
+  form: document.getElementById('promptForm'),
+  promptInput: document.getElementById('promptInput'),
+  genButton: document.getElementById('genButton'),
+  output: document.getElementById('output'),
+  candidates: document.getElementById('candidates'),
+  tempSlider: document.getElementById('tempSlider'),
+  tempVal: document.getElementById('tempVal'),
+  lengthSlider: document.getElementById('lengthSlider'),
+  lengthVal: document.getElementById('lengthVal'),
+  topkSlider: document.getElementById('topkSlider'),
+  topkVal: document.getElementById('topkVal'),
+};
+
+function syncSliders() {
+  els.tempVal.textContent = parseFloat(els.tempSlider.value).toFixed(2);
+  els.lengthVal.textContent = els.lengthSlider.value;
+  els.topkVal.textContent = els.topkSlider.value;
+}
+[els.tempSlider, els.lengthSlider, els.topkSlider].forEach(s => s.addEventListener('input', syncSliders));
+syncSliders();
+
+document.querySelectorAll('.preset').forEach(btn => {
+  btn.addEventListener('click', () => {
+    els.promptInput.value = btn.dataset.prompt;
+    els.promptInput.focus();
+  });
+});
+
+async function checkHealth() {
+  try {
+    const res = await fetch(`${API}/health`);
+    if (!res.ok) throw new Error('not ok');
+    const data = await res.json();
+    els.statusDot.className = 'status-dot ready';
+    els.statusText.textContent = 'model loaded';
+    els.paramCount.textContent = `${data.params.toLocaleString()} params`;
+    els.offlineBanner.classList.remove('show');
+    els.genButton.disabled = false;
+    return true;
+  } catch (e) {
+    els.statusDot.className = 'status-dot';
+    els.statusText.textContent = 'server offline';
+    els.paramCount.textContent = '—';
+    els.offlineBanner.classList.add('show');
+    els.genButton.disabled = true;
+    return false;
+  }
+}
+
+let generating = false;
+
+els.form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (generating) return;
+
+  const ok = await checkHealth();
+  if (!ok) return;
+
+  generating = true;
+  els.genButton.disabled = true;
+  els.genButton.textContent = 'Writing…';
+  els.statusDot.className = 'status-dot live';
+  els.statusText.textContent = 'generating';
+  els.candidates.innerHTML = '';
+
+  const prompt = els.promptInput.value || '\n';
+  els.output.innerHTML = escapeHtml(prompt) + '<span class="cursor"></span>';
+
+  try {
+    const res = await fetch(`${API}/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: prompt,
+        tokens: parseInt(els.lengthSlider.value),
+        temperature: parseFloat(els.tempSlider.value),
+        top_k: parseInt(els.topkSlider.value),
+      }),
+    });
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    let full = prompt;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const parts = buf.split('\n\n');
+      buf = parts.pop();
+      for (const part of parts) {
+        const line = part.replace(/^data:\s*/, '');
+        if (!line) continue;
+        const payload = JSON.parse(line);
+        if (payload.done) continue;
+        full += payload.token;
+        els.output.innerHTML = escapeHtml(full) + '<span class="cursor"></span>';
+        els.output.scrollTop = els.output.scrollHeight;
+        renderCandidate(payload.token);
+        await sleep(18); // pace it so it reads as "thinking", not a memory dump
+      }
+    }
+  } catch (err) {
+    els.output.innerHTML += `<br><span style="color:#d99a8a">— generation stopped: ${escapeHtml(String(err.message || err))}</span>`;
+  }
+
+  generating = false;
+  els.genButton.disabled = false;
+  els.genButton.textContent = 'Generate';
+  els.statusDot.className = 'status-dot ready';
+  els.statusText.textContent = 'model loaded';
+});
+
+function renderCandidate(token) {
+  const display = token === '\n' ? '↵' : token === ' ' ? '·' : token;
+  const chip = document.createElement('span');
+  chip.className = 'candidate chosen';
+  chip.innerHTML = `<span class="ch">${escapeHtml(display)}</span>`;
+  els.candidates.appendChild(chip);
+  while (els.candidates.children.length > 24) {
+    els.candidates.removeChild(els.candidates.firstChild);
+  }
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+checkHealth();
+setInterval(checkHealth, 8000);
+</script>
+
+</body>
+</html>
